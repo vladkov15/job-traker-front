@@ -1,17 +1,14 @@
 "use client";
-import { useState } from "react";
+import { addJob, deleteJob, fetchJobs, updateJob } from "@/api/api";
+import { useEffect, useState } from "react";
 
-enum JobStatus {
-  Open = "Open",
-  Close = "Close",
-}
 
 interface Job {
+  _id?:string;
   company: string;
-  vacancy: string;
-  salaryMin: string;
-  salaryMax: string;
-  status: JobStatus;
+  position: string;
+  salary: string;
+  status: string
   note: string;
 }
 
@@ -23,14 +20,23 @@ const JobTracker: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [newJob, setNewJob] = useState<Job>({
     company: "",
-    vacancy: "",
-    salaryMin: "",
-    salaryMax: "",
-    status: JobStatus.Open,
+    position: "",
+    salary: "",
+    status: "",
     note: "",
   });
   const [errors, setErrors] = useState<{ [key: string]: boolean }>({});
   const [editJobData, setEditJobData] = useState<Job | null>(null);
+
+  useEffect(() => {
+    async function fetchposition() {
+      const vacancies:Job[]  = await fetchJobs()
+     setJobs(vacancies)
+     console.log(vacancies);
+     
+    }
+    fetchposition()
+  },[])
 
   const openEditModal = (index: number) => {
     setSelectedJobIndex(index);
@@ -57,11 +63,11 @@ const JobTracker: React.FC = () => {
   const closeModal = () => {
     setIsModalOpen(false);
     setNewJob({
+      _id: "",
       company: "",
-      vacancy: "",
-      salaryMin: "",
-      salaryMax: "",
-      status: JobStatus.Open,
+      position: "",
+      salary: "",
+      status: "",
       note: "",
     });
     setErrors({});
@@ -70,38 +76,45 @@ const JobTracker: React.FC = () => {
   const validateJob = (job: Job) => {
     const newErrors: { [key: string]: boolean } = {};
     if (!job.company) newErrors.company = true;
-    if (!job.vacancy) newErrors.vacancy = true;
-    if (!job.salaryMin) newErrors.salaryMin = true;
-    if (!job.salaryMax) newErrors.salaryMax = true;
+    if (!job.position) newErrors.position = true;
+    if (!job.status) newErrors.status = true
+    if (!job.salary) newErrors.salary = true;
     if (!job.note) newErrors.note = true;
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const addJob = () => {
+  const handleAddJob = async () => {  
+    console.log(newJob);
+    
     if (validateJob(newJob)) {
+      await addJob(newJob)
       setJobs([...jobs, newJob]);
       closeModal();
     }
   };
 
-  const deleteJob = (index: number) => {
+  const handleDeleteJob = async (index: number) => {
+    console.log(jobs[index]);
+    
+    if(!jobs[index]._id) return;
     setJobs(jobs.filter((_, i) => i !== index));
+    await deleteJob(jobs[index]._id)
     setIsDeleteConfirmOpen(false);
   };
 
-  const editJob = (index: number, updatedJob: Job) => {
+  const editJob = async (index: number, updatedJob: Job) => {
     if (
       !updatedJob.company ||
-      !updatedJob.vacancy ||
-      !updatedJob.salaryMin ||
-      !updatedJob.salaryMax ||
+      !updatedJob.position ||
+      !updatedJob.salary ||
       !updatedJob.note
     ) {
       alert("Пожалуйста, заполните все поля.");
       return;
     }
+    await updateJob(updatedJob._id!, updatedJob)
     setJobs(jobs.map((job, i) => (i === index ? updatedJob : job)));
   };
 
@@ -129,10 +142,10 @@ const JobTracker: React.FC = () => {
                   {job.company}
                 </td>
                 <td className="border border-gray-300 px-4 py-2">
-                  {job.vacancy}
+                  {job.position}
                 </td>
                 <td className="border border-gray-300 px-4 py-2">
-                  {job.salaryMin}$ - {job.salaryMax}$
+                  {job.salary}$
                 </td>
                 <td className="border border-gray-300 px-4 py-2">
                   {job.status}
@@ -185,55 +198,42 @@ const JobTracker: React.FC = () => {
               <label>Вакансия 📋</label>
               <input
                 type="text"
-                value={newJob.vacancy}
+                value={newJob.position}
                 onChange={(e) =>
-                  setNewJob({ ...newJob, vacancy: e.target.value })
+                  setNewJob({ ...newJob, position: e.target.value })
                 }
                 className={`border-2 w-full p-2 text-black ${
-                  errors.vacancy ? "border-red-500" : ""
+                  errors.position ? "border-red-500" : ""
                 }`}
               />
             </div>
             <div className="flex space-x-2">
               <div className="mb-2 w-full sm:w-1/2">
-                <label>Зарплатная вилка (от) 💸</label>
+                <label>Зарплатная вилка 💸</label>
                 <input
                   type="text"
-                  value={newJob.salaryMin}
+                  value={newJob.salary}
                   onChange={(e) =>
-                    setNewJob({ ...newJob, salaryMin: e.target.value })
+                    setNewJob({ ...newJob, salary: e.target.value })
                   }
                   className={`border-2 w-full p-2 text-black ${
-                    errors.salaryMin ? "border-red-500" : ""
-                  }`}
-                />
-              </div>
-              <div className="mb-2 w-full sm:w-1/2">
-                <label>Зарплатная вилка (до) 💸</label>
-                <input
-                  type="text"
-                  value={newJob.salaryMax}
-                  onChange={(e) =>
-                    setNewJob({ ...newJob, salaryMax: e.target.value })
-                  }
-                  className={`border-2 w-full p-2 text-black ${
-                    errors.salaryMax ? "border-red-500" : ""
+                    errors.salary ? "border-red-500" : ""
                   }`}
                 />
               </div>
             </div>
             <div className="mb-2">
               <label>Статус 📊</label>
-              <select
-                value={newJob.status}
-                onChange={(e) =>
-                  setNewJob({ ...newJob, status: e.target.value as JobStatus })
-                }
-                className="border-2 w-full p-2 text-black"
-              >
-                <option value={JobStatus.Open}>Open</option>
-                <option value={JobStatus.Close}>Close</option>
-              </select>
+              <input
+                  type="text"
+                  value={newJob.status}
+                  onChange={(e) =>
+                    setNewJob({ ...newJob, status: e.target.value })
+                  }
+                  className={`border-2 w-full p-2 text-black ${
+                    errors.status ? "border-red-500" : ""
+                  }`}
+                />
             </div>
             <div className="mb-2">
               <label>Заметка 📝</label>
@@ -255,7 +255,7 @@ const JobTracker: React.FC = () => {
               </button>
               <button
                 className="bg-green-500 text-white px-4 py-2 rounded"
-                onClick={addJob}
+                onClick={handleAddJob}
               >
                 Сохранить
               </button>
@@ -282,37 +282,23 @@ const JobTracker: React.FC = () => {
               <label>Вакансия 📋</label>
               <input
                 type="text"
-                value={editJobData.vacancy}
+                value={editJobData.position}
                 onChange={(e) =>
-                  setEditJobData({ ...editJobData, vacancy: e.target.value })
+                  setEditJobData({ ...editJobData, position: e.target.value })
                 }
                 className="border-2 w-full p-2 text-black"
               />
             </div>
             <div className="flex space-x-2">
               <div className="mb-2 w-full sm:w-1/2">
-                <label>Зарплатная вилка (от) 💸</label>
+                <label>Зарплатная вилка 💸</label>
                 <input
                   type="text"
-                  value={editJobData.salaryMin}
+                  value={editJobData.salary}
                   onChange={(e) =>
                     setEditJobData({
                       ...editJobData,
-                      salaryMin: e.target.value,
-                    })
-                  }
-                  className="border-2 w-full p-2 text-black"
-                />
-              </div>
-              <div className="mb-2 w-full sm:w-1/2">
-                <label>Зарплатная вилка (до) 💸</label>
-                <input
-                  type="text"
-                  value={editJobData.salaryMax}
-                  onChange={(e) =>
-                    setEditJobData({
-                      ...editJobData,
-                      salaryMax: e.target.value,
+                      salary: e.target.value,
                     })
                   }
                   className="border-2 w-full p-2 text-black"
@@ -320,20 +306,18 @@ const JobTracker: React.FC = () => {
               </div>
             </div>
             <div className="mb-2">
-              <label>Статус 📊</label>
-              <select
-                value={editJobData.status}
-                onChange={(e) =>
-                  setEditJobData({
-                    ...editJobData,
-                    status: e.target.value as JobStatus,
-                  })
-                }
-                className="border-2 w-full p-2 text-black"
-              >
-                <option value={JobStatus.Open}>Open</option>
-                <option value={JobStatus.Close}>Close</option>
-              </select>
+            <label>Статус 📊</label>
+            <input
+                  type="text"
+                  value={editJobData.status}
+                  onChange={(e) =>
+                    setEditJobData({
+                      ...editJobData,
+                      status: e.target.value,
+                    })
+                  }
+                  className="border-2 w-full p-2 text-black"
+                />
             </div>
             <div className="mb-2">
               <label>Заметка 📝</label>
@@ -382,7 +366,7 @@ const JobTracker: React.FC = () => {
               </button>
               <button
                 className="bg-red-500 text-white px-4 py-2 rounded"
-                onClick={() => deleteJob(selectedJobIndex)}
+                onClick={() => handleDeleteJob(selectedJobIndex)}
               >
                 Удалить
               </button>
