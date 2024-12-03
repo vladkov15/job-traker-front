@@ -1,7 +1,8 @@
 import axios from "axios";
+const url = process.env.URL;
 
 const api = axios.create({
-  baseURL: "http://localhost:4000", 
+  baseURL: "https://kst6n3-34197.csb.app",
 });
 
 export interface Job {
@@ -23,7 +24,10 @@ export const addJob = async (data: Omit<Job, "_id">): Promise<Job> => {
   return response.data;
 };
 
-export const updateJob = async (id: string, data: Partial<Job>): Promise<Job> => {
+export const updateJob = async (
+  id: string,
+  data: Partial<Job>
+): Promise<Job> => {
   const response = await api.put<Job>(`/jobs/${id}`, data);
   return response.data;
 };
