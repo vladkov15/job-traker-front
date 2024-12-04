@@ -65,15 +65,7 @@ const JobTracker: React.FC = () => {
     handleSubmit,
     reset,
     formState: { errors }
-  } = useForm<Job>({
-    defaultValues: {
-      company: '',
-      position: '',
-      salary: '',
-      status: '',
-      note: ''
-    }
-  });
+  } = useForm<Job>();
 
   const openModal = (job?: Job) => {
     setIsModalOpen(true);
@@ -81,7 +73,7 @@ const JobTracker: React.FC = () => {
       setSelectedJob(job);
       reset(job); // Устанавливаем старые данные при открытии модального окна
     } else {
-      reset(); // Очистка формы, если это новая запись
+      reset({}); // Очистка формы для новой записи
     }
   };
 
