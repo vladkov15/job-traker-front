@@ -1,4 +1,4 @@
-"use client"; // Add this line to mark the file as a Client Component
+"use client"; 
 
 import { useQuery, useMutation, useQueryClient, QueryClient, QueryClientProvider } from "react-query";
 import { useForm } from "react-hook-form";
@@ -71,16 +71,17 @@ const JobTracker: React.FC = () => {
     setIsModalOpen(true);
     if (job) {
       setSelectedJob(job);
-      reset(job); // Устанавливаем старые данные при открытии модального окна
+      reset(job); 
     } else {
-      reset({}); // Очистка формы для новой записи
+      setSelectedJob(null);
+      reset({}); 
     }
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
     setSelectedJob(null);
-    reset();
+    reset(); 
   };
 
   const onSubmit = (data: Job) => {
