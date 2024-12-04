@@ -81,7 +81,7 @@ const JobTracker: React.FC = () => {
   const closeModal = () => {
     setIsModalOpen(false);
     setSelectedJob(null);
-    reset(); 
+    reset({}); 
   };
 
   const onSubmit = (data: Job) => {
