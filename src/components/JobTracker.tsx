@@ -1,380 +1,254 @@
-"use client";
-import { addJob, deleteJob, fetchJobs, updateJob } from "@/api/api";
-import { useEffect, useState } from "react";
+"use client"; // Add this line to mark the file as a Client Component
 
+import { useQuery, useMutation, useQueryClient, QueryClient, QueryClientProvider } from "react-query";
+import { useForm } from "react-hook-form";
+import {
+  fetchJobs,
+  addJob,
+  updateJob,
+  deleteJob,
+} from "@/api/api";
+import { useState } from "react";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 interface Job {
-  _id?:string;
+  _id?: string;
   company: string;
   position: string;
   salary: string;
-  status: string
+  status: string;
   note: string;
 }
 
 const JobTracker: React.FC = () => {
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const queryClient = useQueryClient();
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [selectedJobIndex, setSelectedJobIndex] = useState<number | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [newJob, setNewJob] = useState<Job>({
-    company: "",
-    position: "",
-    salary: "",
-    status: "",
-    note: "",
+
+  const { data: jobs = [], isLoading } = useQuery("jobs", fetchJobs);
+
+  const addMutation = useMutation(addJob, {
+    onSuccess: () => {
+      queryClient.invalidateQueries("jobs");
+      toast.success("Запись успешно добавлена!");
+      closeModal();
+    },
+    onError: () => {
+      toast.error("Ошибка при добавлении записи.");
+    },
   });
-  const [errors, setErrors] = useState<{ [key: string]: boolean }>({});
-  const [editJobData, setEditJobData] = useState<Job | null>(null);
 
-  useEffect(() => {
-    async function fetchposition() {
-      const vacancies:Job[]  = await fetchJobs()
-     setJobs(vacancies)
-     console.log(vacancies);
-     
+  const updateMutation = useMutation(({ id, job }: { id: string; job: Job }) => updateJob(id, job), {
+    onSuccess: () => {
+      queryClient.invalidateQueries("jobs");
+      toast.success("Запись успешно обновлена!");
+      closeModal();
+    },
+    onError: () => {
+      toast.error("Ошибка при обновлении записи.");
+    },
+  });
+
+  const deleteMutation = useMutation((id: string) => deleteJob(id), {
+    onSuccess: () => {
+      queryClient.invalidateQueries("jobs");
+      toast.success("Запись успешно удалена!");
+    },
+    onError: () => {
+      toast.error("Ошибка при удалении записи.");
+    },
+  });
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors }
+  } = useForm<Job>({
+    defaultValues: {
+      company: '',
+      position: '',
+      salary: '',
+      status: '',
+      note: ''
     }
-    fetchposition()
-  },[])
+  });
 
-  const openEditModal = (index: number) => {
-    setSelectedJobIndex(index);
-    setEditJobData({ ...jobs[index] });
-    setIsEditModalOpen(true);
+  const openModal = (job?: Job) => {
+    setIsModalOpen(true);
+    if (job) {
+      setSelectedJob(job);
+      reset(job); // Устанавливаем старые данные при открытии модального окна
+    } else {
+      reset(); // Очистка формы, если это новая запись
+    }
   };
 
-  const closeEditModal = () => {
-    setIsEditModalOpen(false);
-    setEditJobData(null);
-  };
-
-  const confirmDelete = (index: number) => {
-    setSelectedJobIndex(index);
-    setIsDeleteConfirmOpen(true);
-  };
-
-  const cancelDelete = () => {
-    setIsDeleteConfirmOpen(false);
-    setSelectedJobIndex(null);
-  };
-
-  const openModal = () => setIsModalOpen(true);
   const closeModal = () => {
     setIsModalOpen(false);
-    setNewJob({
-      _id: "",
-      company: "",
-      position: "",
-      salary: "",
-      status: "",
-      note: "",
-    });
-    setErrors({});
+    setSelectedJob(null);
+    reset();
   };
 
-  const validateJob = (job: Job) => {
-    const newErrors: { [key: string]: boolean } = {};
-    if (!job.company) newErrors.company = true;
-    if (!job.position) newErrors.position = true;
-    if (!job.status) newErrors.status = true
-    if (!job.salary) newErrors.salary = true;
-    if (!job.note) newErrors.note = true;
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleAddJob = async () => {  
-    console.log(newJob);
-    
-    if (validateJob(newJob)) {
-      await addJob(newJob)
-      setJobs([...jobs, newJob]);
-      closeModal();
+  const onSubmit = (data: Job) => {
+    if (selectedJob) {
+      updateMutation.mutate({ id: selectedJob._id!, job: data });
+    } else {
+      addMutation.mutate(data);
     }
   };
 
-  const handleDeleteJob = async (index: number) => {
-    console.log(jobs[index]);
-    
-    if(!jobs[index]._id) return;
-    setJobs(jobs.filter((_, i) => i !== index));
-    await deleteJob(jobs[index]._id)
-    setIsDeleteConfirmOpen(false);
+  const handleDelete = (id: string) => {
+    deleteMutation.mutate(id);
   };
 
-  const editJob = async (index: number, updatedJob: Job) => {
-    if (
-      !updatedJob.company ||
-      !updatedJob.position ||
-      !updatedJob.salary ||
-      !updatedJob.note
-    ) {
-      alert("Пожалуйста, заполните все поля.");
-      return;
-    }
-    await updateJob(updatedJob._id!, updatedJob)
-    setJobs(jobs.map((job, i) => (i === index ? updatedJob : job)));
-  };
+  if (isLoading) return <div>Загрузка...</div>;
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Job Tracker</h1>
-      <div className="overflow-x-auto">
-        <table className="table-auto w-full border-collapse border border-gray-300">
-          <thead>
-            <tr>
-              <th className="border border-gray-300 px-4 py-2">Компания 🏢</th>
-              <th className="border border-gray-300 px-4 py-2">Вакансия 📋</th>
-              <th className="border border-gray-300 px-4 py-2">
-                Зарплатная вилка 💸
-              </th>
-              <th className="border border-gray-300 px-4 py-2">Статус 📊</th>
-              <th className="border border-gray-300 px-4 py-2">Заметка 📝</th>
-              <th className="border border-gray-300 px-4 py-2">Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            {jobs.map((job, index) => (
-              <tr key={index}>
-                <td className="border border-gray-300 px-4 py-2">
-                  {job.company}
-                </td>
-                <td className="border border-gray-300 px-4 py-2">
-                  {job.position}
-                </td>
-                <td className="border border-gray-300 px-4 py-2">
-                  {job.salary}$
-                </td>
-                <td className="border border-gray-300 px-4 py-2">
-                  {job.status}
-                </td>
-                <td className="border border-gray-300 px-4 py-2">{job.note}</td>
-                <td className="border border-gray-300 px-4 py-2">
-                  <button
-                    className="bg-red-500 text-white px-2 py-1 mr-2 rounded"
-                    onClick={() => confirmDelete(index)}
-                  >
-                    Удалить
-                  </button>
-                  <button
-                    className="bg-blue-500 text-white px-2 py-1 rounded"
-                    onClick={() => openEditModal(index)}
-                  >
-                    Редактировать
-                  </button>
-                </td>
+    <QueryClientProvider client={queryClient}>
+      <div className="container mx-auto p-4">
+        <h1 className="text-2xl font-bold mb-4">Job Tracker</h1>
+        <button
+          className="bg-green-500 text-white px-4 py-2 mb-4 rounded"
+          onClick={() => openModal()}
+        >
+          + Добавить запись
+        </button>
+        <div className="overflow-x-auto">
+          <table className="table-auto w-full border-collapse border border-gray-300">
+            <thead>
+              <tr>
+                <th className="border border-gray-300 px-4 py-2">Компания</th>
+                <th className="border border-gray-300 px-4 py-2">Вакансия</th>
+                <th className="border border-gray-300 px-4 py-2">Зарплата</th>
+                <th className="border border-gray-300 px-4 py-2">Статус</th>
+                <th className="border border-gray-300 px-4 py-2">Заметка</th>
+                <th className="border border-gray-300 px-4 py-2">Действия</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {jobs.map((job: Job) => (
+                <tr key={job._id}>
+                  <td className="border border-gray-300 px-4 py-2">{job.company}</td>
+                  <td className="border border-gray-300 px-4 py-2">{job.position}</td>
+                  <td className="border border-gray-300 px-4 py-2">{job.salary}</td>
+                  <td className="border border-gray-300 px-4 py-2">{job.status}</td>
+                  <td className="border border-gray-300 px-4 py-2">{job.note}</td>
+                  <td className="border border-gray-300 px-4 py-2">
+                    <button
+                      className="bg-blue-500 text-white px-2 py-1 mr-2 rounded"
+                      onClick={() => openModal(job)}
+                    >
+                      Редактировать
+                    </button>
+                    <button
+                      className="bg-red-500 text-white px-2 py-1 rounded"
+                      onClick={() => handleDelete(job._id!)}
+                    >
+                      Удалить
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {isModalOpen && (
+          <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex justify-center items-center">
+            <div className="bg-black p-6 rounded shadow-md max-w-md w-full">
+              <h2 className="text-xl text-black font-bold mb-4">
+                {selectedJob ? "Редактировать запись" : "Добавить запись"}
+              </h2>
+              <form onSubmit={handleSubmit(onSubmit)}>
+                <div className="mb-2">
+                  <label>Компания</label>
+                  <input
+                    {...register("company", {
+                      required: "Компания обязательна",
+                      minLength: {
+                        value: 3,
+                        message: "Название компании должно быть не короче 3 символов"
+                      }
+                    })}
+                    className={`border w-full p-2 text-black ${errors.company ? "border-red-500" : ""}`}
+                  />
+                  {errors.company && <span className="text-red-500">{errors.company.message}</span>}
+                </div>
+                <div className="mb-2">
+                  <label>Вакансия</label>
+                  <input
+                    {...register("position", {
+                      required: "Вакансия обязательна",
+                      minLength: {
+                        value: 2,
+                        message: "Название вакансии должно быть не короче 2 символов"
+                      }
+                    })}
+                    className={`border w-full p-2 text-black ${errors.position ? "border-red-500" : ""}`}
+                  />
+                  {errors.position && <span className="text-red-500">{errors.position.message}</span>}
+                </div>
+                <div className="mb-2">
+                  <label>Зарплата</label>
+                  <input
+                    {...register("salary", {
+                      required: "Зарплата обязательна",
+                      pattern: {
+                        value: /^\d+$/,
+                        message: "Зарплата должна быть числом"
+                      }
+                    })}
+                    className={`border w-full p-2 text-black ${errors.salary ? "border-red-500" : ""}`}
+                  />
+                  {errors.salary && <span className="text-red-500">{errors.salary.message}</span>}
+                </div>
+                <div className="mb-2">
+                  <label>Статус</label>
+                  <input
+                    {...register("status", {
+                      required: "Статус обязателен"
+                    })}
+                    className={`border w-full p-2 text-black ${errors.status ? "border-red-500" : ""}`}
+                  />
+                  {errors.status && <span className="text-red-500">{errors.status.message}</span>}
+                </div>
+                <div className="mb-2">
+                  <label>Заметка</label>
+                  <input
+                    {...register("note", {
+                      required: "Заметка обязательна",
+                      maxLength: {
+                        value: 200,
+                        message: "Заметка не должна превышать 200 символов"
+                      }
+                    })}
+                    className={`border w-full p-2 text-black ${errors.note ? "border-red-500" : ""}`}
+                  />
+                  {errors.note && <span className="text-red-500">{errors.note.message}</span>}
+                </div>
+                <div className="flex justify-end mt-4">
+                  <button
+                    type="button"
+                    className="bg-gray-500 text-white px-4 py-2 rounded mr-2"
+                    onClick={closeModal}
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-green-500 text-white px-4 py-2 rounded"
+                  >
+                    Сохранить
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+        <ToastContainer />
       </div>
-      <button
-        className="bg-green-500 text-white px-4 py-2 mt-4 block md:inline-block rounded"
-        onClick={openModal}
-      >
-        + Добавить запись
-      </button>
-
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex justify-center items-center">
-          <div className="bg-black p-6 rounded shadow-md max-w-md w-full sm:max-w-lg md:max-w-xl">
-            <h2 className="text-xl font-bold mb-4">Добавить запись</h2>
-            <div className="mb-2">
-              <label>Компания 🏢</label>
-              <input
-                type="text"
-                value={newJob.company}
-                onChange={(e) =>
-                  setNewJob({ ...newJob, company: e.target.value })
-                }
-                className={`border-2 w-full p-2 text-black ${
-                  errors.company ? "border-red-500" : ""
-                }`}
-              />
-            </div>
-            <div className="mb-2">
-              <label>Вакансия 📋</label>
-              <input
-                type="text"
-                value={newJob.position}
-                onChange={(e) =>
-                  setNewJob({ ...newJob, position: e.target.value })
-                }
-                className={`border-2 w-full p-2 text-black ${
-                  errors.position ? "border-red-500" : ""
-                }`}
-              />
-            </div>
-            <div className="flex space-x-2">
-              <div className="mb-2 w-full sm:w-1/2">
-                <label>Зарплатная вилка 💸</label>
-                <input
-                  type="text"
-                  value={newJob.salary}
-                  onChange={(e) =>
-                    setNewJob({ ...newJob, salary: e.target.value })
-                  }
-                  className={`border-2 w-full p-2 text-black ${
-                    errors.salary ? "border-red-500" : ""
-                  }`}
-                />
-              </div>
-            </div>
-            <div className="mb-2">
-              <label>Статус 📊</label>
-              <input
-                  type="text"
-                  value={newJob.status}
-                  onChange={(e) =>
-                    setNewJob({ ...newJob, status: e.target.value })
-                  }
-                  className={`border-2 w-full p-2 text-black ${
-                    errors.status ? "border-red-500" : ""
-                  }`}
-                />
-            </div>
-            <div className="mb-2">
-              <label>Заметка 📝</label>
-              <input
-                type="text"
-                value={newJob.note}
-                onChange={(e) => setNewJob({ ...newJob, note: e.target.value })}
-                className={`border-2 w-full p-2 text-black ${
-                  errors.note ? "border-red-500" : ""
-                }`}
-              />
-            </div>
-            <div className="flex justify-between mt-4">
-              <button
-                className="bg-gray-500 text-white px-4 py-2 rounded"
-                onClick={closeModal}
-              >
-                Отмена
-              </button>
-              <button
-                className="bg-green-500 text-white px-4 py-2 rounded"
-                onClick={handleAddJob}
-              >
-                Сохранить
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {isEditModalOpen && editJobData && (
-        <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex justify-center items-center">
-          <div className="bg-black p-6 rounded shadow-md max-w-md w-full sm:max-w-lg md:max-w-xl">
-            <h2 className="text-xl font-bold mb-4">Редактировать запись</h2>
-            <div className="mb-2">
-              <label>Компания 🏢</label>
-              <input
-                type="text"
-                value={editJobData.company}
-                onChange={(e) =>
-                  setEditJobData({ ...editJobData, company: e.target.value })
-                }
-                className="border-2 w-full p-2 text-black"
-              />
-            </div>
-            <div className="mb-2">
-              <label>Вакансия 📋</label>
-              <input
-                type="text"
-                value={editJobData.position}
-                onChange={(e) =>
-                  setEditJobData({ ...editJobData, position: e.target.value })
-                }
-                className="border-2 w-full p-2 text-black"
-              />
-            </div>
-            <div className="flex space-x-2">
-              <div className="mb-2 w-full sm:w-1/2">
-                <label>Зарплатная вилка 💸</label>
-                <input
-                  type="text"
-                  value={editJobData.salary}
-                  onChange={(e) =>
-                    setEditJobData({
-                      ...editJobData,
-                      salary: e.target.value,
-                    })
-                  }
-                  className="border-2 w-full p-2 text-black"
-                />
-              </div>
-            </div>
-            <div className="mb-2">
-            <label>Статус 📊</label>
-            <input
-                  type="text"
-                  value={editJobData.status}
-                  onChange={(e) =>
-                    setEditJobData({
-                      ...editJobData,
-                      status: e.target.value,
-                    })
-                  }
-                  className="border-2 w-full p-2 text-black"
-                />
-            </div>
-            <div className="mb-2">
-              <label>Заметка 📝</label>
-              <input
-                type="text"
-                value={editJobData.note}
-                onChange={(e) =>
-                  setEditJobData({ ...editJobData, note: e.target.value })
-                }
-                className="border-2 w-full p-2 text-black"
-              />
-            </div>
-            <div className="flex justify-end">
-              <button
-                className="bg-red-500 text-white px-4 py-2 mr-2 rounded"
-                onClick={closeEditModal}
-              >
-                Отмена
-              </button>
-              <button
-                className="bg-blue-500 text-white px-4 py-2 rounded"
-                onClick={() => {
-                  if (selectedJobIndex !== null) {
-                    editJob(selectedJobIndex, editJobData);
-                    setIsEditModalOpen(false)
-                  }
-                }}
-              >
-                Сохранить
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {isDeleteConfirmOpen && selectedJobIndex !== null && (
-        <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex justify-center items-center">
-          <div className="bg-black p-6 rounded shadow-md max-w-sm w-full">
-            <h3 className="text-lg font-bold mb-4">Подтверждение удаления</h3>
-            <p>Вы уверены, что хотите удалить эту запись?</p>
-            <div className="flex justify-between mt-4">
-              <button
-                className="bg-gray-500 text-white px-4 py-2 rounded"
-                onClick={cancelDelete}
-              >
-                Отмена
-              </button>
-              <button
-                className="bg-red-500 text-white px-4 py-2 rounded"
-                onClick={() => handleDeleteJob(selectedJobIndex)}
-              >
-                Удалить
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+    </QueryClientProvider>
   );
 };
 
